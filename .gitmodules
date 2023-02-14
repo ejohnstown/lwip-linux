@@ -1,0 +1,9 @@
+[submodule "wolfssl"]
+	path = wolfssl
+	url = git@github.com:wolfssl/wolfssl
+[submodule "wolfssh"]
+	path = wolfssh
+	url = git@github.com:wolfssl/wolfssh
+[submodule "lwip"]
+	path = lwip
+	url = git://git.savannah.gnu.org/lwip.git

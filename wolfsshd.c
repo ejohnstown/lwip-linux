@@ -1,4 +1,6 @@
 
+#include "wolfssh/ssh.h"
+#include "wolfssh/wolfsftp.h"
 #include "wolfsshd.h"
 
 #include "lwip/opt.h"
@@ -382,8 +384,12 @@ sshd(void)
 
 
 #ifndef NO_MAIN
+
 int main(int argc, char *argv[])
 {
+#ifdef DEBUG_WOLFSSH
+    wolfSSH_Debugging_ON();
+#endif
     //lwip_init();
     tcpip_init(NULL, NULL);
     wolfsshds_init();

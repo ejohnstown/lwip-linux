@@ -136,8 +136,8 @@ static void ssh_client_connected(int lClientSocket)
     static char cOutputString[CLI_CMD_MAX_OUTPUT_SIZE];
     static char cLocalBuffer[CLI_CMD_SOCKET_INPUT_BUFFER_SIZE];
     const char CLI_PROMPT_STRING[] = "> ";
-    word32 xBytes, xByte;
-    int lSocket, lServerSocket;
+    int xBytes, xByte;
+    int lSocket = lClientSocket;
     struct timeval xTimeout;
     int iResult;
     const char *session_cmd = NULL;
@@ -352,7 +352,36 @@ static void ssh_client_connected(int lClientSocket)
 }
 
 
-sshd(void)
+static struct netif tapif;
+static ip4_addr_t a4, nm4, gw4;
+static void wolfsshds_init(void)
+{
+    int addr_ok;
+    ip_addr_t nma, gwa;
+
+    memset(&tapif, 0, sizeof(tapif));
+    IP_SET_TYPE_VAL(local_addr, IPADDR_TYPE_V4);
+    addr_ok = ip4addr_aton(TAPDEV_IP, ip_2_ip4(&local_addr));
+    LWIP_ASSERT("invalid address", addr_ok);
+    ip4addr_aton(TAPDEV_IP, ip_2_ip4(&tapif.ip_addr));
+    ip4addr_aton(TAPDEV_NETMASK, ip_2_ip4(&tapif.netmask));
+    ip4addr_aton(TAPDEV_GW, ip_2_ip4(&tapif.gw));
+    tapif.output = etharp_output;
+    tapif.mtu = 1500;
+    tapif.flags = NETIF_FLAG_ETHARP |NETIF_FLAG_BROADCAST;
+    a4.addr = tapif.ip_addr.addr;
+    nm4.addr = tapif.netmask.addr;
+    gw4.addr = tapif.gw.addr;
+    netif_add(&tapif, &a4, &nm4, &gw4, NULL, tapif_init,
+              tcpip_input);
+
+    netif_set_up(&tapif);
+    netif_set_link_up(&tapif);
+
+}
+
+
+void sshd(void)
 {
     int s;
     struct sockaddr_in saddr;
@@ -396,33 +425,5 @@ int main(int argc, char *argv[])
     sshd();
 }
 #endif
-
-static struct netif tapif;
-static ip4_addr_t a4, nm4, gw4;
-void wolfsshds_init(void)
-{
-    int addr_ok;
-    ip_addr_t nma, gwa;
-
-    memset(&tapif, 0, sizeof(tapif));
-    IP_SET_TYPE_VAL(local_addr, IPADDR_TYPE_V4);
-    addr_ok = ip4addr_aton(TAPDEV_IP, ip_2_ip4(&local_addr));
-    LWIP_ASSERT("invalid address", addr_ok);
-    ip4addr_aton(TAPDEV_IP, ip_2_ip4(&tapif.ip_addr));
-    ip4addr_aton(TAPDEV_NETMASK, ip_2_ip4(&tapif.netmask));
-    ip4addr_aton(TAPDEV_GW, ip_2_ip4(&tapif.gw));
-    tapif.output = etharp_output;
-    tapif.mtu = 1500;
-    tapif.flags = NETIF_FLAG_ETHARP |NETIF_FLAG_BROADCAST;
-    a4.addr = tapif.ip_addr.addr;
-    nm4.addr = tapif.netmask.addr;
-    gw4.addr = tapif.gw.addr;
-    netif_add(&tapif, &a4, &nm4, &gw4, NULL, tapif_init,
-              tcpip_input);
-
-    netif_set_up(&tapif);
-    netif_set_link_up(&tapif);
-  
-}
 
 #endif /* LWIP_SOCKET */

@@ -52,6 +52,22 @@ static const char samplePublicKeyEccBuffer[] =
     "IZzRYecXh7SG9P4GhRY= gretel\n";
 
 
+static const unsigned char server_key_ecc_der[] = {
+  0x30, 0x77, 0x02, 0x01, 0x01, 0x04, 0x20, 0x61, 0x09, 0x99, 0x0b, 0x79,
+  0xd2, 0x5f, 0x28, 0x5a, 0x0f, 0x5d, 0x15, 0xcc, 0xa1, 0x56, 0x54, 0xf9,
+  0x2b, 0x39, 0x87, 0x21, 0x2d, 0xa7, 0x7d, 0x85, 0x7b, 0xb8, 0x7f, 0x38,
+  0xc6, 0x6d, 0xd5, 0xa0, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
+  0x03, 0x01, 0x07, 0xa1, 0x44, 0x03, 0x42, 0x00, 0x04, 0x81, 0x13, 0xff,
+  0xa4, 0x2b, 0xb7, 0x9c, 0x45, 0x74, 0x7a, 0x83, 0x4c, 0x61, 0xf3, 0x3f,
+  0xad, 0x26, 0xcf, 0x22, 0xcd, 0xa9, 0xa3, 0xbc, 0xa5, 0x61, 0xb4, 0x7c,
+  0xe6, 0x62, 0xd4, 0xc2, 0xf7, 0x55, 0x43, 0x9a, 0x31, 0xfb, 0x80, 0x11,
+  0x20, 0xb5, 0x12, 0x4b, 0x24, 0xf5, 0x78, 0xd7, 0xfd, 0x22, 0xef, 0x46,
+  0x35, 0xf0, 0x05, 0x58, 0x6b, 0x5f, 0x63, 0xc8, 0xda, 0x1b, 0xc4, 0xf5,
+  0x69
+};
+unsigned int server_key_ecc_der_len = 121;
+
+
 /* Maximum parallel sessions */
 #define MAX_SSH_SESSIONS 4
 
@@ -129,7 +145,7 @@ static const char serverBanner[] = "wolfSSH Server\n";
 
 static ip_addr_t local_addr;
 
-static void ssh_client_connected(int lClientSocket)
+static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
 {
     signed char cInChar, cInputIndex = 0;
     static char cInputString[CLI_CMD_MAX_INPUT_SIZE];
@@ -142,11 +158,12 @@ static void ssh_client_connected(int lClientSocket)
     int iResult;
     const char *session_cmd = NULL;
     int idx, ret;
-    WOLFSSH_CTX* ctx = NULL;
     WOLFSSH *ssh = NULL;
     PwMapList pwMapList;
     word32 bufSz = 0;
+
     printf("CLI - Client (socket:%d) is connected\n", lClientSocket);
+
     idx = ssh_avail_session();
     if (idx < 0) {
         printf("CLI - Too many SSH connections, closing.\n");
@@ -381,10 +398,30 @@ static void wolfsshds_init(void)
 }
 
 
+static int UserAuthCb(byte type, WS_UserAuthData* ua, void* ctx)
+{
+    (void)type;
+    (void)ua;
+    (void)ctx;
+    return WOLFSSH_USERAUTH_SUCCESS;
+}
+
+
 void sshd(void)
 {
     int s;
     struct sockaddr_in saddr;
+    WOLFSSH_CTX* ctx = NULL;
+
+    ssh_init_sessions();
+
+    ctx = wolfSSH_CTX_new(WOLFSSH_ENDPOINT_SERVER, NULL);
+    wolfSSH_CTX_UsePrivateKey_buffer(ctx,
+		    server_key_ecc_der,
+		    server_key_ecc_der_len,
+		    WOLFSSH_FORMAT_ASN1);
+    wolfSSH_SetUserAuth(ctx, UserAuthCb);
+
     s = lwip_socket(AF_INET, SOCK_STREAM, 0);
     LWIP_ASSERT("s >= 0", s >= 0);
     memset(&saddr, 0, sizeof(saddr));
@@ -407,7 +444,7 @@ void sshd(void)
             sleep(1);
             continue;
         }
-        ssh_client_connected(conn_sd);
+        ssh_client_connected(conn_sd, ctx);
     }
 }
 

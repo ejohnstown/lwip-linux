@@ -144,6 +144,48 @@ static int ssh_sftp_session_active(void)
 #define CLI_KEEPALIVE_PACKET_COUNT          (30) // Keepalive max packet count
 
 
+static void shell_client_connected(struct ssh_client_socket* ss)
+{
+    WOLFSSH* ssh = ss->ssh;
+
+    printf("SHELL - Client is connected\n");
+
+}
+
+
+static void sftp_client_connected(struct ssh_client_socket* ss)
+{
+    WOLFSSH* ssh = ss->ssh;
+
+    printf("SFTP - Client is connected\n");
+
+    for (;;) {
+        int ret;
+        int err;
+        do {
+            unsigned char peek_buf[1];
+            ret = wolfSSH_SFTP_read(ssh);
+            if (ret < 0)
+                break;
+            ret = wolfSSH_stream_peek(ssh, peek_buf, 1);
+            if (ret <= 0)
+                break;
+        } while(ret >= 0);
+        err = wolfSSH_get_error(ssh);
+        if (ret == WS_FATAL_ERROR && err == 0) {
+            WOLFSSH_CHANNEL* channel =
+                wolfSSH_ChannelNext(ssh, NULL);
+            if (channel && wolfSSH_ChannelGetEof(channel)) {
+                ret = 0;
+                printf("SFTP - Connection terminated.\n");
+                return;
+            }
+        }
+        continue;
+    }
+}
+
+
 static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
 {
     signed char cInChar, cInputIndex = 0;
@@ -190,11 +232,14 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
     if (ret == WS_SFTP_COMPLETE) {
         if (ssh_sftp_session_active()){
             printf("Only one SFTP session allowed at one time. Closing...\n");
-            lwip_close(lClientSocket);
-            return;
         }
-        printf("SFTP client connected\n");
-        ssh_session[idx].is_sftp = 1;
+        else {
+            printf("SFTP client connected\n");
+            ssh_session[idx].is_sftp = 1;
+            sftp_client_connected(&ssh_session[idx]);
+        }
+        lwip_close(lClientSocket);
+        return;
     }
     else if (ret != WS_SUCCESS) {
         printf("wolfSSH_accept: error %d\n\n", ret);
@@ -227,30 +272,6 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
     /* Transmit a spacer, just to make the command console easier to read. */
     wolfSSH_stream_send(ssh, (byte *)CLI_PROMPT_STRING,  strlen(CLI_PROMPT_STRING));
     for (;;) {
-        if (ssh_session[idx].is_sftp) {
-            int ret;
-            int err;
-            do {
-                unsigned char peek_buf[1];
-                ret = wolfSSH_SFTP_read(ssh);
-                if (ret < 0)
-                    break;
-                ret = wolfSSH_stream_peek(ssh, peek_buf, 1);
-                if (ret <= 0)
-                    break;
-            } while(ret >= 0);
-            err = wolfSSH_get_error(ssh);
-            if (ret == WS_FATAL_ERROR && err == 0) {
-                WOLFSSH_CHANNEL* channel =
-                    wolfSSH_ChannelNext(ssh, NULL);
-                if (channel && wolfSSH_ChannelGetEof(channel)) {
-                    ret = 0;
-                    printf("SFTP - Connection terminated.\n");
-                    lwip_close(lSocket);
-                }
-            }
-            continue;
-        }
         xBytes = wolfSSH_stream_read(ssh, (byte *)cLocalBuffer, sizeof(cLocalBuffer));
         if (xBytes < 0)
         {

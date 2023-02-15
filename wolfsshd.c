@@ -146,106 +146,22 @@ static int ssh_sftp_session_active(void)
 
 static void shell_client_connected(struct ssh_client_socket* ss)
 {
-    WOLFSSH* ssh = ss->ssh;
-
-    printf("SHELL - Client is connected\n");
-
-}
-
-
-static void sftp_client_connected(struct ssh_client_socket* ss)
-{
-    WOLFSSH* ssh = ss->ssh;
-
-    printf("SFTP - Client is connected\n");
-
-    for (;;) {
-        int ret;
-        int err;
-        do {
-            unsigned char peek_buf[1];
-            ret = wolfSSH_SFTP_read(ssh);
-            if (ret < 0)
-                break;
-            ret = wolfSSH_stream_peek(ssh, peek_buf, 1);
-            if (ret <= 0)
-                break;
-        } while(ret >= 0);
-        err = wolfSSH_get_error(ssh);
-        if (ret == WS_FATAL_ERROR && err == 0) {
-            WOLFSSH_CHANNEL* channel =
-                wolfSSH_ChannelNext(ssh, NULL);
-            if (channel && wolfSSH_ChannelGetEof(channel)) {
-                ret = 0;
-                printf("SFTP - Connection terminated.\n");
-                return;
-            }
-        }
-        continue;
-    }
-}
-
-
-static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
-{
     signed char cInChar, cInputIndex = 0;
     static char cInputString[CLI_CMD_MAX_INPUT_SIZE];
     static char cOutputString[CLI_CMD_MAX_OUTPUT_SIZE];
     static char cLocalBuffer[CLI_CMD_SOCKET_INPUT_BUFFER_SIZE];
     const char CLI_PROMPT_STRING[] = "> ";
     int xBytes, xByte;
-    int lSocket = lClientSocket;
     struct timeval xTimeout;
     int iResult;
     const char *session_cmd = NULL;
     int idx, ret;
-    WOLFSSH *ssh = NULL;
-    PwMapList pwMapList;
+    int s = ss->fd;
     word32 bufSz = 0;
+    WOLFSSH* ssh = ss->ssh;
 
-    printf("CLI - Client (socket:%d) is connected\n", lClientSocket);
+    printf("SHELL - Client is connected\n");
 
-    idx = ssh_avail_session();
-    if (idx < 0) {
-        printf("CLI - Too many SSH connections, closing.\n");
-        lwip_close(lClientSocket);
-        return;
-    }
-    ssh_session[idx].fd = lClientSocket;
-    ssh = wolfSSH_new(ctx);
-    ssh_session[idx].ssh = ssh;
-    ssh_session[idx].is_sftp = 0;
-    ssh_session[idx].is_interactive = 0;
-    if (ssh == NULL) {
-        printf( "Couldn't allocate SSH session data.\n");
-        lwip_close(lSocket);
-        return;
-    }
-    /* Associate map list as context for the auth callback */
-    wolfSSH_SetUserAuthCtx(ssh, &pwMapList);
-
-    /* Associate TCP socket to the SSH session */
-    wolfSSH_set_fd(ssh, (int)lClientSocket);
-
-    /* Accept SSH session */
-    ret = wolfSSH_accept(ssh);
-    if (ret == WS_SFTP_COMPLETE) {
-        if (ssh_sftp_session_active()){
-            printf("Only one SFTP session allowed at one time. Closing...\n");
-        }
-        else {
-            printf("SFTP client connected\n");
-            ssh_session[idx].is_sftp = 1;
-            sftp_client_connected(&ssh_session[idx]);
-        }
-        lwip_close(lClientSocket);
-        return;
-    }
-    else if (ret != WS_SUCCESS) {
-        printf("wolfSSH_accept: error %d\n\n", ret);
-        lwip_close(lClientSocket);
-        return;
-    }
     printf("SSH client connected\n");
     session_cmd = wolfSSH_GetSessionCommand(ssh);
     if (session_cmd) {
@@ -257,7 +173,7 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
         wolfSSH_stream_send(ssh, (byte *)cOutputString, strlen(cOutputString));
 
         /* Nothing else to do. Disconnect. */
-        lwip_close(lClientSocket);
+        lwip_close(s);
         return;
     }
     printf("Interactive mode\n");
@@ -265,9 +181,10 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
         const char too_many_conn_msg[] = "Too many interactive connections.\r\n";
         printf("Only one interactive session allowed at one time. Closing...\n");
         wolfSSH_stream_send(ssh, (byte*)too_many_conn_msg, strlen(too_many_conn_msg));
-        lwip_close(lClientSocket);
+        lwip_close(s);
+        return;
     } else {
-        ssh_session[idx].is_interactive = 1;
+        ss->is_interactive = 1;
     }
     /* Transmit a spacer, just to make the command console easier to read. */
     wolfSSH_stream_send(ssh, (byte *)CLI_PROMPT_STRING,  strlen(CLI_PROMPT_STRING));
@@ -279,17 +196,17 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
             err = wolfSSH_get_error(ssh);
             if (err != WS_WANT_READ)
             {
-
-                lwip_close(lSocket);
+                lwip_close(s);
                 printf("CLI - SSH receive error: %s.\nClient (socket:%d) is disconnected\n",
-                        wolfSSH_ErrorToName(err), lSocket);
-
+                        wolfSSH_ErrorToName(err), s);
+                return;
             }
         }
         else if (xBytes == 0)
         {
-            lwip_close(lSocket);
-            printf("CLI - Client (socket:%d) is disconnected\n", lSocket);
+            lwip_close(s);
+            printf("CLI - Client (socket:%d) is disconnected\n", s);
+            return;
         }
         else
         {
@@ -303,24 +220,24 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
                     wolfSSH_stream_send(ssh, (byte *)"\r\n", 2);
                     wolfSSH_stream_send(ssh, (byte *)"CTRL+C", 6);
                     wolfSSH_stream_send(ssh, (byte *)"\r\n", 2);
-                    printf("Received CTRL+C: Client %d is disconnected\n", lSocket);
-                    lwip_close(lSocket);
-                    break;
+                    printf("Received CTRL+C: Client %d is disconnected\n", s);
+                    lwip_close(s);
+                    return;
                 }
                 if (cInChar == 0x04) { /* CTRL+D */
                     wolfSSH_stream_send(ssh, (byte *)"\r\n", 2);
                     wolfSSH_stream_send(ssh, (byte *)"CTRL+D", 6);
                     wolfSSH_stream_send(ssh, (byte *)"\r\n", 2);
-                    printf("Received CTRL+D: Client %d is disconnected\n", lSocket);
-                    lwip_close(lSocket);
-                    break;
+                    printf("Received CTRL+D: Client %d is disconnected\n", s);
+                    lwip_close(s);
+                    return;
                 }
                 if (cInChar == 0x06) { /* ACK == Rekey */
                     printf("Received REKEY\n");
                     if (wolfSSH_TriggerKeyExchange(ssh)
                             != WS_SUCCESS) {
-                        lwip_close(lSocket);
-                        break;
+                        lwip_close(s);
+                        return;
                     }
                 }
                 /* Clear the input buffer if the input character is not ASCII */
@@ -384,6 +301,92 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
                 }
             }
         }
+    }
+}
+
+
+static void sftp_client_connected(struct ssh_client_socket* ss)
+{
+    WOLFSSH* ssh = ss->ssh;
+
+    printf("SFTP - Client is connected\n");
+
+    for (;;) {
+        int ret;
+        int err;
+        do {
+            unsigned char peek_buf[1];
+            ret = wolfSSH_SFTP_read(ssh);
+            if (ret < 0)
+                break;
+            ret = wolfSSH_stream_peek(ssh, peek_buf, 1);
+            if (ret <= 0)
+                break;
+        } while(ret >= 0);
+        err = wolfSSH_get_error(ssh);
+        if (ret == WS_FATAL_ERROR && err == 0) {
+            WOLFSSH_CHANNEL* channel =
+                wolfSSH_ChannelNext(ssh, NULL);
+            if (channel && wolfSSH_ChannelGetEof(channel)) {
+                ret = 0;
+                printf("SFTP - Connection terminated.\n");
+                return;
+            }
+        }
+        continue;
+    }
+}
+
+
+static void ssh_client_connected(int s, WOLFSSH_CTX* ctx)
+{
+    WOLFSSH *ssh = NULL;
+    PwMapList pwMapList;
+    int ret, idx;
+
+    printf("CLI - Client (socket:%d) is connected\n", s);
+
+    idx = ssh_avail_session();
+    if (idx < 0) {
+        printf("CLI - Too many SSH connections, closing.\n");
+        lwip_close(s);
+        return;
+    }
+    ssh_session[idx].fd = s;
+    ssh = wolfSSH_new(ctx);
+    ssh_session[idx].ssh = ssh;
+    ssh_session[idx].is_sftp = 0;
+    ssh_session[idx].is_interactive = 0;
+    if (ssh == NULL) {
+        printf( "Couldn't allocate SSH session data.\n");
+        lwip_close(s);
+        return;
+    }
+    /* Associate map list as context for the auth callback */
+    wolfSSH_SetUserAuthCtx(ssh, &pwMapList);
+
+    /* Associate TCP socket to the SSH session */
+    wolfSSH_set_fd(ssh, s);
+
+    /* Accept SSH session */
+    ret = wolfSSH_accept(ssh);
+    if (ret == WS_SFTP_COMPLETE) {
+        if (ssh_sftp_session_active()){
+            printf("Only one SFTP session allowed at one time. Closing...\n");
+        }
+        else {
+            printf("SFTP client connected\n");
+            ssh_session[idx].is_sftp = 1;
+            sftp_client_connected(&ssh_session[idx]);
+        }
+        lwip_close(s);
+    }
+    else if (ret != WS_SUCCESS) {
+        printf("wolfSSH_accept: error %d\n\n", ret);
+        lwip_close(s);
+    }
+    else {
+        shell_client_connected(&ssh_session[idx]);
     }
 }
 

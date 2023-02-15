@@ -68,6 +68,9 @@ static const unsigned char server_key_ecc_der[] = {
 unsigned int server_key_ecc_der_len = 121;
 
 
+static const char serverBanner[] = "wolfSSH Testing Server\n";
+
+
 /* Maximum parallel sessions */
 #define MAX_SSH_SESSIONS 4
 
@@ -128,8 +131,6 @@ static int ssh_sftp_session_active(void)
     return 0;
 }
 
-static const char serverBanner[] = "wolfSSH Server\n";
-
 
 /* Dimensions the buffer into which input characters are placed. */
 #define CLI_CMD_MAX_INPUT_SIZE              (64)
@@ -142,8 +143,6 @@ static const char serverBanner[] = "wolfSSH Server\n";
 #define CLI_KEEPALIVE_INTERVAL_TIME         (60) // Keepalive interval time in second
 #define CLI_KEEPALIVE_PACKET_COUNT          (30) // Keepalive max packet count
 
-
-static ip_addr_t local_addr;
 
 static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
 {
@@ -196,9 +195,8 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
         }
         printf("SFTP client connected\n");
         ssh_session[idx].is_sftp = 1;
-        return;
     }
-    if (ret != WS_SUCCESS) {
+    else if (ret != WS_SUCCESS) {
         printf("wolfSSH_accept: error %d\n\n", ret);
         lwip_close(lClientSocket);
         return;
@@ -371,10 +369,11 @@ static void ssh_client_connected(int lClientSocket, WOLFSSH_CTX* ctx)
 
 static struct netif tapif;
 static ip4_addr_t a4, nm4, gw4;
+
 static void wolfsshds_init(void)
 {
     int addr_ok;
-    ip_addr_t nma, gwa;
+    ip_addr_t local_addr;
 
     memset(&tapif, 0, sizeof(tapif));
     IP_SET_TYPE_VAL(local_addr, IPADDR_TYPE_V4);
@@ -391,10 +390,8 @@ static void wolfsshds_init(void)
     gw4.addr = tapif.gw.addr;
     netif_add(&tapif, &a4, &nm4, &gw4, NULL, tapif_init,
               tcpip_input);
-
     netif_set_up(&tapif);
     netif_set_link_up(&tapif);
-
 }
 
 
@@ -421,6 +418,7 @@ void sshd(void)
             server_key_ecc_der_len,
             WOLFSSH_FORMAT_ASN1);
     wolfSSH_SetUserAuth(ctx, UserAuthCb);
+    wolfSSH_CTX_SetBanner(ctx, serverBanner);
 
     s = lwip_socket(AF_INET, SOCK_STREAM, 0);
     LWIP_ASSERT("s >= 0", s >= 0);
@@ -437,9 +435,9 @@ void sshd(void)
     }
     for (;;) {
         int conn_sd;
-        ip_addr_t cli_addr;
+        struct sockaddr_in cli_addr;
         word32 socklen = sizeof(cli_addr);
-        conn_sd = lwip_accept(s, &cli_addr, &socklen);
+        conn_sd = lwip_accept(s, (struct sockaddr*)&cli_addr, &socklen);
         if (conn_sd < 0) {
             sleep(1);
             continue;

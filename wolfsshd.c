@@ -72,60 +72,60 @@ unsigned int server_key_ecc_der_len = 121;
 #define MAX_SSH_SESSIONS 4
 
 struct ssh_client_socket {
-	int fd;
-	WOLFSSH *ssh;
-	int is_sftp;
-	int is_interactive;
+    int fd;
+    WOLFSSH *ssh;
+    int is_sftp;
+    int is_interactive;
 };
 
 static struct ssh_client_socket ssh_session[MAX_SSH_SESSIONS];
 
 static int ssh_get_session(int fd)
 {
-	int i;
-	for (i = 0; i < MAX_SSH_SESSIONS; i++) {
-		if (ssh_session[i].fd == fd)
-			return i;
-	}
-	return -1;
+    int i;
+    for (i = 0; i < MAX_SSH_SESSIONS; i++) {
+        if (ssh_session[i].fd == fd)
+            return i;
+    }
+    return -1;
 }
 
 static void ssh_init_sessions(void)
 {
-	int i;
-	for (i = 0; i < MAX_SSH_SESSIONS; i++)
-		ssh_session[i].fd = -1;
+    int i;
+    for (i = 0; i < MAX_SSH_SESSIONS; i++)
+        ssh_session[i].fd = -1;
 }
 
 static int ssh_avail_session(void)
 {
-	int i;
-	for (i = 0; i < MAX_SSH_SESSIONS; i++) {
-		if (ssh_session[i].fd == -1)
-			return i;
-	}
-	return -1;
+    int i;
+    for (i = 0; i < MAX_SSH_SESSIONS; i++) {
+        if (ssh_session[i].fd == -1)
+            return i;
+    }
+    return -1;
 }
 static int ssh_interactive_mode_active(void)
 {
-	int i;
-	for (i = 0; i < MAX_SSH_SESSIONS; i++)
-	{
-		if ((ssh_session[i].fd != -1) && (ssh_session[i].is_interactive == 1))
-			return 1;
-	}
-	return 0;
+    int i;
+    for (i = 0; i < MAX_SSH_SESSIONS; i++)
+    {
+        if ((ssh_session[i].fd != -1) && (ssh_session[i].is_interactive == 1))
+            return 1;
+    }
+    return 0;
 }
 
 static int ssh_sftp_session_active(void)
 {
-	int i;
-	for (i = 0; i < MAX_SSH_SESSIONS; i++)
-	{
-		if ((ssh_session[i].fd != -1) && (ssh_session[i].is_sftp == 1))
-			return 1;
-	}
-	return 0;
+    int i;
+    for (i = 0; i < MAX_SSH_SESSIONS; i++)
+    {
+        if ((ssh_session[i].fd != -1) && (ssh_session[i].is_sftp == 1))
+            return 1;
+    }
+    return 0;
 }
 
 static const char serverBanner[] = "wolfSSH Server\n";
@@ -417,9 +417,9 @@ void sshd(void)
 
     ctx = wolfSSH_CTX_new(WOLFSSH_ENDPOINT_SERVER, NULL);
     wolfSSH_CTX_UsePrivateKey_buffer(ctx,
-		    server_key_ecc_der,
-		    server_key_ecc_der_len,
-		    WOLFSSH_FORMAT_ASN1);
+            server_key_ecc_der,
+            server_key_ecc_der_len,
+            WOLFSSH_FORMAT_ASN1);
     wolfSSH_SetUserAuth(ctx, UserAuthCb);
 
     s = lwip_socket(AF_INET, SOCK_STREAM, 0);

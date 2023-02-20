@@ -4,14 +4,14 @@
 #define LWIP_TIMERS                     1
 #define LWIP_TIMERS_CUSTOM              0
 #define LWIP_MPU_COMPATIBLE             0
-#define LWIP_TCPIP_CORE_LOCKING         0
+#define LWIP_TCPIP_CORE_LOCKING         1
 #define LWIP_TCPIP_CORE_LOCKING_INPUT   0
 #define SYS_LIGHTWEIGHT_PROT            1
 #define MEM_LIBC_MALLOC                 0
 #define MEMP_MEM_MALLOC                 0
 #define MEMP_MEM_INIT                   0
 #define MEM_ALIGNMENT                   1
-#define MEM_SIZE                        1600
+#define MEM_SIZE                        (128 * 1024)
 #define MEMP_OVERFLOW_CHECK             0
 #define MEMP_SANITY_CHECK               0
 #define MEM_OVERFLOW_CHECK              0
@@ -20,6 +20,10 @@
 #define MEM_USE_POOLS_TRY_BIGGER_POOL   0
 #define MEMP_USE_CUSTOM_POOLS           0
 #define LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT 0
+
+#define MEMP_NUM_TCP_SEG                16
+#define PBUF_POOL_SIZE                  128
+
 /*#define MEMP_NUM_PBUF                   16
 #define MEMP_NUM_RAW_PCB                4
 #define MEMP_NUM_UDP_PCB                4
@@ -99,13 +103,13 @@
 #define LWIP_NETBUF_RECVINFO            0
 #define LWIP_TCP                        1
 #define TCP_TTL                         (IP_DEFAULT_TTL)
+#define TCP_MSS                         1460
 #define TCP_WND                         (4 * TCP_MSS)
 #define TCP_MAXRTX                      12
 #define TCP_SYNMAXRTX                   6
 #define TCP_QUEUE_OOSEQ                 (LWIP_TCP)
 #define LWIP_TCP_SACK_OUT               0
 #define LWIP_TCP_MAX_SACK_NUM           4
-#define TCP_MSS                         536
 #define TCP_CALCULATE_EFF_SEND_MSS      1
 #define TCP_SND_BUF                     (2 * TCP_MSS)
 #define TCP_SND_QUEUELEN                ((4 * (TCP_SND_BUF) + (TCP_MSS - 1))/(TCP_MSS))

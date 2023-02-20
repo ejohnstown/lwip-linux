@@ -35,18 +35,22 @@
 
 #define WOLFSSL_LWIP
 #define WORD64_AVAILABLE
-//#define USE_FAST_MATH
-
+#if 0
+#define USE_FAST_MATH
+#endif
 
 /* Debug (very verbose) */
+#if 0
 #define DEBUG_WOLFSSH
+#endif
 
 /* WolfSSH features */
-//#define WOLFSSH_SCP
-//#define WOLFSSH_SCP_USER_CALLBACKS
+#if 0
+#define WOLFSSH_SCP
+#define WOLFSSH_SCP_USER_CALLBACKS
+#endif
 #define WOLFSSH_MAX_SFTP_RECV (32 * 1024)
 #define WOLFSSH_MAX_SFTP_RW (32 * 1024)
-//#define WOLFSSH_SFTP_BUFFER_LIMIT (16*1024)
 #define WOLFSSH_LWIP
 #define WOLFSSH_NO_TIMESTAMP
 #define NO_WOLFSSH_CLIENT
@@ -54,9 +58,11 @@
 
 /* SFTP with FATFS */
 #define WOLFSSH_SFTP
-//#define NO_WOLFSSH_DIR
-//#define NO_WOLFSSL_DIR
-//#define WOLFSSL_USER_FILESYSTEM
+#if 0
+#define NO_WOLFSSH_DIR
+#define NO_WOLFSSL_DIR
+#define WOLFSSL_USER_FILESYSTEM
+#endif
 #define WOLFSSH_STOREHANDLE
 
 
@@ -67,9 +73,11 @@
 #define NO_WOLFSSL_DIR
 #define WOLFSSL_NO_CURRDIR
 
+#if 0
 #define HAVE_ED25519
-//#define ED25519_SMALL
+#define ED25519_SMALL
 #define WOLFSSL_SHA512
+#endif
 
 #define HAVE_ECC
 #define USE_CERT_BUFFERS_256
@@ -87,8 +95,10 @@
 /* SP MATH */
 
 #define WOLFSSL_SP_X86_64
-//#define WOLFSSL_SP_ASM
-//#define WOLFSSL_SP_X86_64_ASM
+#if 0
+#define WOLFSSL_SP_ASM
+#define WOLFSSL_SP_X86_64_ASM
+#endif
 #define WOLFSSL_SP
 #define WOLFSSL_SP_MATH
 #define SP_WORD_SIZE 64
@@ -111,7 +121,7 @@
 #define HAVE_AES_ECB
 #define HAVE_AES_CBC
 #define WOLFSSL_AES_DIRECT
-//#define WOLFSSL_AES_COUNTER
+#define WOLFSSL_AES_COUNTER
 #define HAVE_PWDBASED
 #define HAVE_POLY1035
 

@@ -305,36 +305,83 @@ static void shell_client_connected(struct ssh_client_socket* ss)
 }
 
 
+#define MS2US(x) ((x) * 1000)
+
 static void sftp_client_connected(struct ssh_client_socket* ss)
 {
-    WOLFSSH* ssh = ss->ssh;
+    fd_set readset;
+    struct timeval timeout;
+    int ret;
+    unsigned char peek_buf[1];
+    int counter = 0;
 
     printf("SFTP - Client is connected\n");
 
-    for (;;) {
-        int ret;
-        int err;
-        do {
-            unsigned char peek_buf[1];
-            ret = wolfSSH_SFTP_read(ssh);
-            if (ret < 0)
-                break;
-            ret = wolfSSH_stream_peek(ssh, peek_buf, 1);
-            if (ret <= 0)
-                break;
-        } while(ret >= 0);
-        err = wolfSSH_get_error(ssh);
-        if (ret == WS_FATAL_ERROR && err == 0) {
-            WOLFSSH_CHANNEL* channel =
-                wolfSSH_ChannelNext(ssh, NULL);
+    do {
+        FD_ZERO(&readset);
+        FD_SET(ss->fd, &readset);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = MS2US(50);
+
+        /* Can the socket be read? */
+        ret = lwip_select(ss->fd + 1, &readset, NULL, NULL, &timeout);
+
+        if (ret > 0) {
+            if (FD_ISSET(ss->fd, &readset)) {
+                word32 channelId = 0;
+
+                /*
+                 * Yes, turn the crank on the SSH object. This will take
+                 * care of the behind-the-scenes channel messages like
+                 * updating the peer's receive window size, or SSH level
+                 * messages.
+                 */
+                ret = wolfSSH_worker(ss->ssh, &channelId);
+                printf("worker = %d (%d)\n", ret, counter++);
+                /* Doesn't return, EOF, puts it in error */
+                if (ret == WS_ERROR && wolfSSH_get_error(ss->ssh) == WS_EOF) {
+                    printf("SFTP - Connection terminated.\n");
+                    return;
+                }
+                else if (ret != WS_SUCCESS && ret != WS_CHAN_RXD) {
+                    /* If not successful and no channel data, leave. */
+                    printf("SFTP - connection error\n");
+                    return;
+                }
+                else {
+                    /* check for channel data */
+                }
+            }
+        }
+        else if (ret < 0) {
+            /* Select failed, leave. */
+            printf("SFTP - select failed?\n");
+            return;
+        }
+        else {
+            /* select timed out, check for channel data */
+        }
+
+        /*
+         * If there was data to read in the socket or not, check the
+         * SFTP channel for data. Is there data?
+         */
+        ret = wolfSSH_stream_peek(ss->ssh, peek_buf, 1);
+        if (ret > 0) {
+            /* Yes, process the SFTP data. */
+            ret = wolfSSH_SFTP_read(ss->ssh);
+        }
+
+        /* Old check for EOF here */
+        {
+            WOLFSSH_CHANNEL* channel = wolfSSH_ChannelNext(ss->ssh, NULL);
             if (channel && wolfSSH_ChannelGetEof(channel)) {
-                ret = 0;
-                printf("SFTP - Connection terminated.\n");
+                printf("SFTP - Connection terminated (old).\n");
                 return;
             }
         }
-        continue;
-    }
+    } while (ret >= 0 || ret == WS_CHAN_RXD);
+    printf("SFTP - some other failure (%d)\n", ret);
 }
 
 
@@ -379,15 +426,22 @@ static void ssh_client_connected(int s, WOLFSSH_CTX* ctx)
             ssh_session[idx].is_sftp = 1;
             sftp_client_connected(&ssh_session[idx]);
         }
-        lwip_close(s);
     }
     else if (ret != WS_SUCCESS) {
         printf("wolfSSH_accept: error %d\n\n", ret);
-        lwip_close(s);
     }
     else {
+        printf("SSH client connected\n");
+        ssh_session[idx].is_interactive = 1;
         shell_client_connected(&ssh_session[idx]);
     }
+
+    lwip_close(s);
+    wolfSSH_free(ssh);
+    ssh_session[idx].is_sftp = 0;
+    ssh_session[idx].is_interactive = 0;
+    ssh_session[idx].ssh = NULL;
+    ssh_session[idx].fd = -1;
 }
 
 
